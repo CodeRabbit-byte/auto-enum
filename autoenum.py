@@ -33,12 +33,6 @@ def run_gobuster(target, port, wordlist="/usr/share/wordlists/dirb/common.txt"):
     run_command(cmd)
     print(f"[+] Gobuster scan on port {port} complete.\n")
 
-def run_searchsploit(service):
-    print(f"\n[*] Searching exploits for service: {service} ...\n")
-    cmd = ["searchsploit", service]
-    run_command(cmd)
-    print(f"[+] Searchsploit done for {service}.\n")
-
 def run_nikto(target, port):
     url = f"http://{target}:{port}"
     print(f"\n[*] Running Nikto scan on {url} ...\n")
