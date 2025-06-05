@@ -12,13 +12,13 @@ This script performs:
 
    - nmap
    - gobuster
-   - searchsploit (from exploitdb)
+   
    - nikto
 
 Example install commands (Debian/Ubuntu):
 
    sudo apt update
-   sudo apt install nmap gobuster nikto exploitdb
+   sudo apt install nmap gobuster nikto 
 
 ---
 
@@ -31,7 +31,7 @@ Example install commands (Debian/Ubuntu):
 
 3. Running the script:
 
-   python3 autoenum_basic.py
+   python3 autoenum.py
 
    Then enter the target IP or domain when prompted.
 
