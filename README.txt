@@ -3,7 +3,7 @@ README.txt - Dependency & Usage Guide for Autoenum Script
 
 This script performs:
 - Full Nmap port scan (-p-)
-- Runs SearchSploit on detected services
+
 - Runs Gobuster and Nikto scans on HTTP/HTTPS ports
 
 ---
