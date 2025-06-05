@@ -1,94 +1,74 @@
 import tkinter as tk
-from tkinter import scrolledtext, messagebox, filedialog
+from tkinter import scrolledtext, messagebox
 import threading
 import subprocess
 
-def run_autoenum(target, gobuster, users, passwords, fail_str, output_box):
-    output_box.insert(tk.END, f"[*] Starting automation on {target}\n")
-    output_box.see(tk.END)
+class ScanLauncher(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("CTF Enumeration Launcher")
+        self.geometry("800x600")
+        self.resizable(False, False)
 
-    cmd = [
-        "python3", "autoenum.py", target,
-        "--gobuster", gobuster,
-        "--users", users,
-        "--passwords", passwords,
-        "--failstr", fail_str
-    ]
+        # Target input
+        tk.Label(self, text="Target IP or Domain:", font=("Arial", 12)).pack(pady=(10, 0))
+        self.entry_target = tk.Entry(self, width=50, font=("Arial", 12))
+        self.entry_target.pack(pady=(0, 10))
 
-    try:
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        for line in process.stdout:
-            output_box.insert(tk.END, line)
-            output_box.see(tk.END)
-        process.wait()
-        output_box.insert(tk.END, "\n[+] Automation completed.\n")
-    except Exception as e:
-        output_box.insert(tk.END, f"\n[-] Error: {e}\n")
+        # Start button
+        self.btn_start = tk.Button(self, text="Start Scan", font=("Arial", 12, "bold"), command=self.start_scan_thread)
+        self.btn_start.pack(pady=(0, 10))
 
-def start_thread():
-    target = entry_target.get().strip()
-    gobuster = entry_gobuster.get().strip()
-    users = entry_users.get().strip()
-    passwords = entry_passwords.get().strip()
-    fail_str = entry_fail.get().strip()
+        # Output box (read-only)
+        self.output_box = scrolledtext.ScrolledText(self, width=95, height=30, font=("Consolas", 10))
+        self.output_box.pack(padx=10, pady=10)
+        self.output_box.config(state=tk.DISABLED)  # Make read-only
 
-    if not target:
-        messagebox.showerror("Error", "Please enter a target domain or IP")
-        return
+    def append_output(self, text):
+        self.output_box.config(state=tk.NORMAL)
+        self.output_box.insert(tk.END, text)
+        self.output_box.see(tk.END)
+        self.output_box.config(state=tk.DISABLED)
 
-    threading.Thread(target=run_autoenum, args=(target, gobuster, users, passwords, fail_str, text_output), daemon=True).start()
+    def run_scan(self, target):
+        # Command to run the scanner script (adjust if saved elsewhere)
+        cmd = ["python3", "autoenum", target]
 
-def browse_wordlist(entry_field):
-    file_path = filedialog.askopenfilename()
-    if file_path:
-        entry_field.delete(0, tk.END)
-        entry_field.insert(0, file_path)
+        try:
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
-root = tk.Tk()
-root.title("CTF Auto Enumeration")
+            for line in process.stdout:
+                self.append_output(line)
 
-# Target
-tk.Label(root, text="Target Domain or IP:").pack()
-entry_target = tk.Entry(root, width=50)
-entry_target.pack()
+            process.wait()
+            self.append_output("\n[+] Scan completed.\n")
+        except Exception as e:
+            self.append_output(f"\n[-] Error: {e}\n")
 
-# Gobuster wordlist
-tk.Label(root, text="Gobuster Wordlist:").pack()
-frame_gobuster = tk.Frame(root)
-entry_gobuster = tk.Entry(frame_gobuster, width=40)
-entry_gobuster.pack(side=tk.LEFT)
-tk.Button(frame_gobuster, text="Browse", command=lambda: browse_wordlist(entry_gobuster)).pack(side=tk.LEFT)
-frame_gobuster.pack()
+        # Re-enable the start button after scan
+        self.btn_start.config(state=tk.NORMAL)
 
-# Hydra usernames
-tk.Label(root, text="Hydra Usernames List:").pack()
-frame_users = tk.Frame(root)
-entry_users = tk.Entry(frame_users, width=40)
-entry_users.pack(side=tk.LEFT)
-tk.Button(frame_users, text="Browse", command=lambda: browse_wordlist(entry_users)).pack(side=tk.LEFT)
-frame_users.pack()
+    def start_scan_thread(self):
+        target = self.entry_target.get().strip()
+        if not target:
+            messagebox.showerror("Error", "Please enter a target IP or domain.")
+            return
 
-# Hydra passwords
-tk.Label(root, text="Hydra Passwords List:").pack()
-frame_passwords = tk.Frame(root)
-entry_passwords = tk.Entry(frame_passwords, width=40)
-entry_passwords.pack(side=tk.LEFT)
-tk.Button(frame_passwords, text="Browse", command=lambda: browse_wordlist(entry_passwords)).pack(side=tk.LEFT)
-frame_passwords.pack()
+        # Clear previous output
+        self.output_box.config(state=tk.NORMAL)
+        self.output_box.delete(1.0, tk.END)
+        self.output_box.config(state=tk.DISABLED)
 
-# Failure string
-tk.Label(root, text="Hydra Failure String (e.g., 'invalid')").pack()
-entry_fail = tk.Entry(root, width=50)
-entry_fail.insert(0, "invalid")
-entry_fail.pack()
+        # Disable button during scan
+        self.btn_start.config(state=tk.DISABLED)
 
-# Start button
-btn_start = tk.Button(root, text="Start Enumeration", command=start_thread)
-btn_start.pack(pady=10)
+        # Start the scanning in a thread to keep UI responsive
+        thread = threading.Thread(target=self.run_scan, args=(target,), daemon=True)
+        thread.start()
 
-# Output box
-text_output = scrolledtext.ScrolledText(root, width=100, height=25)
-text_output.pack()
 
-root.mainloop()
+if __name__ == "__main__":
+    app = ScanLauncher()
+    app.mainloop()
+
 
