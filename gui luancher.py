@@ -32,7 +32,7 @@ class ScanLauncher(tk.Tk):
 
     def run_scan(self, target):
         # Command to run the scanner script (adjust if saved elsewhere)
-        cmd = ["python3", "autoenum", target]
+        cmd = ["python3", "autoenum.py", target]
 
         try:
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
